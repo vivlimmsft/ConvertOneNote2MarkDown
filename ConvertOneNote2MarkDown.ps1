@@ -6,8 +6,8 @@ Function Remove-InvalidFileNameChars {
       ValueFromPipelineByPropertyName = $true)]
     [String]$Name
   )
-  $newName = $Name.Split([IO.Path]::GetInvalidFileNameChars()) -join '_'
-  return ($newName.Replace(" ", "_"))
+  $newName = $Name.Split([IO.Path]::GetInvalidFileNameChars()) -join '-'
+  return ($newName.Replace(" ", "-"))
 }
 
 # ask for the Notes root path
@@ -26,6 +26,8 @@ if (Test-Path -Path $notesdestpath) {
       $notebook.Name
       $notebookFileName = "$($notebook.Name)" | Remove-InvalidFileNameChars
       New-Item -Path "$($notesdestpath)\" -Name "$($notebookFileName)" -ItemType "directory" -ErrorAction SilentlyContinue
+      New-Item -Path "$($notesdestpath)\$($notebookFileName)" -Name ".attachments" -ItemType "directory" -ErrorAction SilentlyContinue
+      $globalAttachmentPath = "$($notesdestpath)\$($notebookFileName)\.attachments"
       "=============="
 
       foreach ($sectiongroup in $notebook.SectionGroup) {
@@ -173,12 +175,15 @@ if (Test-Path -Path $notesdestpath) {
               $timeStamp = (Get-Date -Format o).ToString()
               $timeStamp = $timeStamp.replace(':', '')
               $re = [regex]"\d{4}-\d{2}-\d{2}T"
+
+              # also move them from /media to global /.attachments
               $images = Get-ChildItem -Path "$($fullexportdirpath)/media" -Include "*.png", "*.gif", "*.jpg", "*.jpeg" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch $re }
               foreach ($image in $images) {
-                $newimageName = "$($pagename)_$($image.BaseName)_$($timeStamp)$($image.Extension)"
+                $newimageName = "onenote_imported_$($sectionFileName)_$($pagename)_$($image.BaseName)_$($timeStamp)$($image.Extension)"
                 # Rename Image
                 try {
                   Rename-Item -Path "$($image.FullName)" -NewName $newimageName -ErrorAction SilentlyContinue
+                  Move-Item -Path "$($fullexportdirpath)/media/$($newimageName)" "$($globalAttachmentPath)"
                 }
                 catch {
                   Write-Host "Error while renaming image '$($image.FullName)' for page '$($page.name)': $($Error[0].ToString())" -ForegroundColor Red
@@ -186,7 +191,7 @@ if (Test-Path -Path $notesdestpath) {
                 }
                 # Change MD file Image Name References
                 try {
-                  ((Get-Content -LiteralPath "$($fullexportpathwithoutextension).md" -Raw).Replace("$($image.Name)", "$($newimageName)")) | Set-Content -LiteralPath "$($fullexportpathwithoutextension).md"
+                  ((Get-Content -LiteralPath "$($fullexportpathwithoutextension).md" -Raw).Replace("media/$($image.Name)", ".attachments/$($newimageName)")) | Set-Content -LiteralPath "$($fullexportpathwithoutextension).md"
                 }
                 catch {
                   Write-Host "Error while renaming image file name references to '$($image.Name)' for file '$($page.name)': $($Error[0].ToString())" -ForegroundColor Red
@@ -242,6 +247,9 @@ if (Test-Path -Path $notesdestpath) {
               if ($headerToAdd) {
                 "$headerToAdd`n$(Get-Content -LiteralPath "$($fullexportpathwithoutextension).md" -Raw)" | Set-Content -LiteralPath "$($fullexportpathwithoutextension).md"
               }
+
+              # create ADO .order file
+              "$($pagename)" >> .order
 
               popd
 
