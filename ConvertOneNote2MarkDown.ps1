@@ -21,7 +21,7 @@ if (Test-Path -Path $notesdestpath) {
   $OneNote.GetHierarchy("", [Microsoft.Office.InterOp.OneNote.HierarchyScope]::hsPages, [ref]$Hierarchy)
 
   foreach ($notebook in $Hierarchy.Notebooks.Notebook) {
-    #if ($notebook.Name -eq "KW1C Portaal Notitieblok" -or $notebook.Name -eq "CHDR - CoCo Notebook") {
+    if ($notebook.Name -eq "NOTEBOOK NAME TO EXPORT") {
       " "
       $notebook.Name
       $notebookFileName = "$($notebook.Name)" | Remove-InvalidFileNameChars
@@ -34,7 +34,7 @@ if (Test-Path -Path $notesdestpath) {
         }
       }
       foreach ($section in $notebook.Section) {
-        #if ($section.Name -eq "IBN - Aanpassen HR Forms en Workflow") {
+        if ($section.Name -eq "SECTION NAME TO EXPORT") {
           "--------------"
           "### " + $section.Name
           $sectionFileName = "$($section.Name)" | Remove-InvalidFileNameChars
@@ -42,7 +42,7 @@ if (Test-Path -Path $notesdestpath) {
           [int]$previouspagelevel = 1
           [string]$previouspagenamelevel1 = ""
           [string]$previouspagenamelevel2 = ""
-          [string]$pageprefix = ""
+          [string]$pageexportdirsuffix = ""
           foreach ($page in $section.Page) {
             "#### " + $page.name
             #if ($page.name -eq "Documentatie") {
@@ -74,46 +74,53 @@ if (Test-Path -Path $notesdestpath) {
 
               # in case multiple pages with the same name exist in a section, postfix the filename
               if ([System.IO.File]::Exists("$($fullexportpathwithoutextension).md")) {
-                $pagename = "$($pagename)_$recurrence"
+                $pagename = "$($pagename)_duplicate$recurrence"
                 $recurrence++
               }
 
               # determine right name prefix based on pagelevel
               if ($pagelevel -eq 1) {
-                $pageprefix = ""
+                $pageexportdirsuffix = ""
                 $previouspagenamelevel1 = $pagename
                 $previouspagenamelevel2 = ""
                 $previouspagelevel = 1
               }
               elseif ($pagelevel -gt $previouspagelevel) {
                 if ($pagelevel -eq 2) {
-                  $pageprefix = "$($previouspagenamelevel1)"
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)" -Name "$($previouspagenamelevel1)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  $pageexportdirsuffix = "$($previouspagenamelevel1)"
                   $previouspagenamelevel2 = $pagename
                   $previouspagelevel = 2
                 }
                 if ($pagelevel -eq 3) {
-                  $pageprefix = "$($previouspagenamelevel1)_$($previouspagenamelevel2)"
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)" -Name "$($previouspagenamelevel1)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)\$($previouspagenamelevel1)" -Name "$($previouspagenamelevel2)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  $pageexportdirsuffix = "$($previouspagenamelevel1)\$($previouspagenamelevel2)"
                   $previouspagelevel = 3
                 }
               }
               elseif ($pagelevel -eq $previouspagelevel -and $pagelevel -ne 1) {
                 if ($pagelevel -eq 2) {
-                  $pageprefix = "$($previouspagenamelevel1)"
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)" -Name "$($previouspagenamelevel1)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  $pageexportdirsuffix = "$($previouspagenamelevel1)"
                   $previouspagenamelevel2 = $pagename
                 }
                 if ($pagelevel -eq 3) {
-                  $pageprefix = "$($previouspagenamelevel1)_$($previouspagenamelevel2)"
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)" -Name "$($previouspagenamelevel1)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)\$($previouspagenamelevel1)" -Name "$($previouspagenamelevel2)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  $pageexportdirsuffix = "$($previouspagenamelevel1)\$($previouspagenamelevel2)"
                 }
               }
               elseif ($pagelevel -lt $previouspagelevel -and $pagelevel -ne 1) {
                 if ($pagelevel -eq 2) {
-                  $pageprefix = "$($previouspagenamelevel1)"
+                  New-Item -Path "$($notesdestpath)\$($notebookFileName)\$($sectionFileName)" -Name "$($previouspagenamelevel1)" -ItemType "directory" -ErrorAction SilentlyContinue
+                  $pageexportdirsuffix = "$($previouspagenamelevel1)"
                   $previouspagenamelevel2 = $pagename
                   $previouspagelevel = 2
                 }
               }
-              if ($pageprefix) {
-                $pagename = "$($pageprefix)_$($pagename)"
+              if ($pageexportdirsuffix) {
+                $fullexportdirpath = "$($fullexportdirpath)\$($pageexportdirsuffix)"
               }
               $fullexportpathwithoutextension = "$($fullexportdirpath)\$($pagename)"
 
@@ -126,6 +133,7 @@ if (Test-Path -Path $notesdestpath) {
                 $totalerr += "Error while publishing file '$($page.name)' to docx: $($Error[0].ToString())`r`n"
               }
 
+              pushd "$($fullexportdirpath)"
               # convert Word to Markdown
               # https://gist.github.com/heardk/ded40b72056cee33abb18f3724e0a580
               try {
@@ -167,7 +175,7 @@ if (Test-Path -Path $notesdestpath) {
               $re = [regex]"\d{4}-\d{2}-\d{2}T"
               $images = Get-ChildItem -Path "$($fullexportdirpath)/media" -Include "*.png", "*.gif", "*.jpg", "*.jpeg" -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch $re }
               foreach ($image in $images) {
-                $newimageName = "$($image.BaseName)_$($timeStamp)$($image.Extension)"
+                $newimageName = "$($pagename)_$($image.BaseName)_$($timeStamp)$($image.Extension)"
                 # Rename Image
                 try {
                   Rename-Item -Path "$($image.FullName)" -NewName $newimageName -ErrorAction SilentlyContinue
@@ -198,6 +206,45 @@ if (Test-Path -Path $notesdestpath) {
                 $totalerr += "Error while renaming image file path references for file '$($page.name)': $($Error[0].ToString())`r`n"
               }
 
+
+              # Build a header to prepend to the page
+              [string]$headerToAdd = "";
+              # Add link to original OneNote page to the header
+              try {
+                [string]$link = "";
+                $OneNote.GetWebHyperlinkToObject($page.ID, "", [ref]$link);
+
+                # skip if $link is empty (local book)
+                if ($link) {
+                    Write-Host $link;
+                    $headerToAdd = "*This page was automatically imported from OneNote. [View source OneNote page]($link)*`n$headerToAdd"
+                }
+              }
+              catch {
+                Write-Host "Error while getting hyperlink for '$($page.name)': $($Error[0].ToString())" -ForegroundColor Red
+                $totalerr += "Error while getting hyperlink for '$($page.name)': $($Error[0].ToString())`r`n"
+              }
+
+              # Add warning about links to other onenote pages if it has any
+              try {
+                $content = (Get-Content -LiteralPath "$($fullexportpathwithoutextension).md" -Raw)
+                if ($content -like '*(onenote:*'){
+                    Write-Host "Page contains links to other OneNote pages"
+                    $headerToAdd = "*This page may contain links to other OneNote pages. Please clean those and then remove this line.*`n$headerToAdd"
+                }
+
+              }
+              catch {
+                Write-Host "Error checking for inter-page links for '$($page.name)': $($Error[0].ToString())" -ForegroundColor Red
+                $totalerr += "Error checking for inter-page links for '$($page.name)': $($Error[0].ToString())`r`n"
+              }
+
+              if ($headerToAdd) {
+                "$headerToAdd`n$(Get-Content -LiteralPath "$($fullexportpathwithoutextension).md" -Raw)" | Set-Content -LiteralPath "$($fullexportpathwithoutextension).md"
+              }
+
+              popd
+
               # Cleanup Word files
               try {
                 Remove-Item -path "$fullexportpath" -Force -ErrorAction SilentlyContinue
@@ -206,11 +253,19 @@ if (Test-Path -Path $notesdestpath) {
                 Write-Host "Error removing intermediary '$($page.name)' docx file: $($Error[0].ToString())" -ForegroundColor Red
                 $totalerr += "Error removing intermediary '$($page.name)' docx file: $($Error[0].ToString())`r`n"
               }
+
+              # try to clean the markdown file if markdownlint-cli is installed from npm
+              if (Get-Command markdownlint -errorAction SilentlyContinue)
+              {
+                markdownlint -f "$($fullexportpathwithoutextension).md" | Out-Null
+
+              }
+
             #}
           }
-        #}
+        }
       }
-    #}
+    }
   }
   # release OneNote hierarchy
   [System.Runtime.Interopservices.Marshal]::ReleaseComObject($OneNote)
